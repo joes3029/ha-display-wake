@@ -1,0 +1,26 @@
+# ha-display-wake.service
+# Systemd USER service for the ha-display-wake MQTT listener.
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp ha-display-wake.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now ha-display-wake.service
+
+[Unit]
+Description=ha-display-wake MQTT listener
+After=network-online.target graphical-session.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/python3 %h/ha-display-wake.py
+Restart=always
+RestartSec=10
+
+# Ensure access to the graphical session for xset/xdotool/dbus
+Environment=DISPLAY=:0
+
+[Install]
+WantedBy=default.target

@@ -4,9 +4,18 @@
 # or append to your automations.yaml file.
 #
 # ── Configuration ──────────────────────────────────────────────────────────────
-# Replace these values:
-#   - binary_sensor.office_pir_motion  → your sensor entity ID
-#   - "office"                         → your room name (must match client config)
+#
+# 1. Set your sensor entity ID here (once) — it's referenced by all three
+#    automations via the YAML anchor &sensor / *sensor:
+#
+#      entity_id: &sensor binary_sensor.office_pir_motion
+#                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#                         Replace this with your sensor's entity ID.
+#                         Find it in HA: Settings → Devices & Services → Entities.
+#
+# 2. Replace "office" in the MQTT topic strings and automation aliases with
+#    your room name. The room name must match what you configure in the client
+#    scripts.
 #
 # The wake interval (minutes: "/10") should be SHORTER than the shortest screen
 # timeout across your PCs. For 20-minute timeouts, 10 minutes is sensible.
@@ -20,7 +29,7 @@
     (sensor transitions from off to on).
   trigger:
     - platform: state
-      entity_id: binary_sensor.office_pir_motion
+      entity_id: &sensor binary_sensor.bench_lights_pir_sensor   # ← SET YOUR SENSOR HERE
       from: "off"
       to: "on"
   action:
@@ -47,7 +56,7 @@
       minutes: "/10"
   condition:
     - condition: state
-      entity_id: binary_sensor.office_pir_motion
+      entity_id: *sensor
       state: "on"
   action:
     - service: mqtt.publish
@@ -64,7 +73,7 @@
     Publishes vacant state when the office sensor goes off.
   trigger:
     - platform: state
-      entity_id: binary_sensor.office_pir_motion
+      entity_id: *sensor
       to: "off"
   action:
     - service: mqtt.publish

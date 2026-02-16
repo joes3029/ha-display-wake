@@ -220,7 +220,7 @@ function Install-MosquittoClient {
                     return $null
                 }
 
-                & winget install EclipseFoundation.Mosquitto --accept-source-agreements --accept-package-agreements
+                & winget install EclipseFoundation.Mosquitto --accept-source-agreements --accept-package-agreements | Out-Host
 
                 # Give the install a moment, then search again
                 Start-Sleep -Seconds 2
@@ -426,7 +426,7 @@ function Invoke-Setup {
         topic              = $topic
         active_threshold   = [int]$activeThreshold
         screen_timeout     = [int]$screenTimeout
-        mosquitto_sub_path = if ($mosquittoPath) { $mosquittoPath } else { "" }
+        mosquitto_sub_path = if ($mosquittoPath) { [string]$mosquittoPath } else { "" }
     }
 
     if (-not (Test-Path $CONFIG_DIR)) {
@@ -652,12 +652,24 @@ $port   = [string]$config.port
 $topic  = $config.topic
 
 # Resolve mosquitto_sub path: config value, then search, then fail gracefully
-$mosquittoSubExe = $config.mosquitto_sub_path
-if (-not $mosquittoSubExe -or -not (Test-Path $mosquittoSubExe)) {
-    $mosquittoSubExe = Find-MosquittoSub
+$mosquittoSubExe = ""
+
+# Try the stored path from config
+$storedPath = [string]$config.mosquitto_sub_path
+if ($storedPath -and $storedPath.Trim() -ne "" -and (Test-Path $storedPath.Trim())) {
+    $mosquittoSubExe = $storedPath.Trim()
 }
-if (-not $mosquittoSubExe -or -not (Test-Path $mosquittoSubExe)) {
-    # Last resort: maybe it's in PATH but wasn't at setup time
+
+# Search PATH and common locations
+if (-not $mosquittoSubExe) {
+    $found = Find-MosquittoSub
+    if ($found) {
+        $mosquittoSubExe = [string]$found
+    }
+}
+
+# Last resort: check PATH directly
+if (-not $mosquittoSubExe) {
     $inPath = Get-Command "mosquitto_sub" -ErrorAction SilentlyContinue
     if ($inPath) {
         $mosquittoSubExe = $inPath.Source

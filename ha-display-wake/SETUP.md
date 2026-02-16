@@ -48,15 +48,13 @@ Most PIR/mmWave integrations (Zigbee2MQTT, ZHA, ESPHome, etc.) have a configurab
 
 ## Step 2: Windows Setup
 
-### Install Mosquitto Client Tools
+### Install Mosquitto Client Tools (handled by setup)
 
-Download from https://mosquitto.org/download/ (Windows 64-bit) or:
+The script needs `mosquitto_sub.exe` to receive MQTT messages. On first run, setup checks for it automatically and offers to install it via `winget` if missing. You can also install it ahead of time:
 
     winget install EclipseFoundation.Mosquitto
 
-You only need the client tools — deselect the Service component during installation. Ensure `C:\Program Files\Mosquitto` is in your PATH:
-
-    mosquitto_sub --help
+Or download from https://mosquitto.org/download/ (Windows 64-bit). You only need the client tools — deselect the Service component during installation.
 
 ### First Run — Interactive Setup
 
@@ -174,6 +172,9 @@ Log: `~/.config/ha-display-wake/ha-display-wake.log`
 
 **Setup can't find the broker:**
 Enter the IP address manually. You can find your HA IP in Settings → System → Network, or check your router's DHCP leases.
+
+**mosquitto_sub not found after install:**
+If you installed Mosquitto via `winget` or the MSI installer but setup still can't find it, the PATH change may not have taken effect yet. Close all terminal windows and re-run `ha-display-wake.bat --setup`. The script also checks `C:\Program Files\mosquitto\` directly, so it should find it there.
 
 **mosquitto_sub won't connect:**
 Test manually: `mosquitto_sub -h <broker> -u <user> -P <pass> -t "#" -v`

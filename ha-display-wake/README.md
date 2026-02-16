@@ -75,7 +75,7 @@ There are three automations: one that fires when someone enters the room, one th
 
 ### 2. Your PCs
 
-**Windows** (requires [Mosquitto client tools](https://mosquitto.org/download/)):
+**Windows** (setup will check for [Mosquitto client tools](https://mosquitto.org/download/) and offer to install if needed):
 ```
 ha-display-wake.bat              # Double-click or run from terminal — first run walks you through setup
 ha-display-wake.bat --setup      # Re-run setup any time
@@ -92,7 +92,7 @@ Both scripts auto-detect your MQTT broker, test the connection, and save configu
 
 | Platform | Display Server | Dependencies |
 |----------|---------------|-------------|
-| Windows 10/11 | — | [Mosquitto client tools](https://mosquitto.org/download/) |
+| Windows 10/11 | — | [Mosquitto client tools](https://mosquitto.org/download/) (setup offers to install) |
 | Linux (X11) | X.Org / Xwayland | python3, paho-mqtt, xdotool, xprintidle, x11-xserver-utils |
 | Linux (Wayland) | GNOME | python3, paho-mqtt |
 

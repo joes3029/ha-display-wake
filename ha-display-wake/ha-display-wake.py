@@ -28,7 +28,57 @@ import time
 import logging
 from pathlib import Path
 
-import paho.mqtt.client as mqtt
+try:
+    import paho.mqtt.client as mqtt
+except ImportError:
+    print()
+    print("paho-mqtt is required but not installed.")
+    print("It's the MQTT client library that lets this script receive messages.")
+    print()
+    print("Options:")
+    print("  [1] Install now via pip (recommended)")
+    print("  [2] Exit -- I'll install it myself")
+    print()
+    choice = input("Choose an option [1]: ").strip() or "1"
+
+    if choice == "1":
+        print()
+        print("Installing paho-mqtt...")
+        # Try with --break-system-packages first (needed on newer Ubuntu/Debian),
+        # fall back to plain pip if that flag isn't supported.
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "paho-mqtt", "--break-system-packages"],
+                stdout=sys.stdout, stderr=sys.stderr,
+            )
+        except subprocess.CalledProcessError:
+            try:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "paho-mqtt"],
+                    stdout=sys.stdout, stderr=sys.stderr,
+                )
+            except subprocess.CalledProcessError:
+                print()
+                print("pip install failed. Try manually:")
+                print("  pip install paho-mqtt --break-system-packages")
+                print("  # or: sudo apt install python3-paho-mqtt")
+                sys.exit(1)
+
+        print()
+        # Re-import after install
+        try:
+            import paho.mqtt.client as mqtt
+            print("paho-mqtt installed successfully!")
+        except ImportError:
+            print("Installation appeared to succeed but import still fails.")
+            print("Try restarting the script.")
+            sys.exit(1)
+    else:
+        print()
+        print("Install paho-mqtt and re-run:")
+        print("  pip install paho-mqtt --break-system-packages")
+        print("  # or: sudo apt install python3-paho-mqtt")
+        sys.exit(1)
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 

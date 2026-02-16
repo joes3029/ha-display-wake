@@ -563,6 +563,45 @@ Write-Log "ha-display-wake starting (broker: ${broker}:${port}, topic: $topic)"
 Write-Log "  mosquitto_sub: $mosquittoSubExe"
 Write-Log "  Active threshold: $($config.active_threshold)s, Screen timeout: $($config.screen_timeout)s"
 
+# -- Pre-flight connection test ----------------------------------------------------
+# Run mosquitto_sub with a short timeout to verify the broker is reachable.
+# Exit code 27 = timeout (connected fine, just no messages) = success.
+# Any other non-zero = connection failure.
+
+Write-Host ""
+Write-Host "Testing MQTT broker connection..." -NoNewline
+
+$testArgs = "-h $broker -p $port -t ha-display-wake/connection-test -W 3 -C 1"
+if (-not [string]::IsNullOrWhiteSpace($config.username)) {
+    $testArgs += " -u $($config.username) -P $($config.password)"
+}
+
+$testProc = Start-Process -FilePath $mosquittoSubExe -ArgumentList $testArgs -Wait -PassThru -WindowStyle Hidden
+$testExit = $testProc.ExitCode
+
+# Exit code 27 = timed out waiting for messages (but connected OK)
+# Exit code 0  = received a message (connected OK)
+if ($testExit -eq 27 -or $testExit -eq 0) {
+    Write-Host " connected!" -ForegroundColor Green
+    Write-Log "Broker connection test: OK"
+}
+else {
+    Write-Host " failed (exit code: $testExit)" -ForegroundColor Red
+    Write-Log "Broker connection test: FAILED (exit code: $testExit)"
+    Write-Host ""
+    Write-Host "Could not connect to MQTT broker at ${broker}:${port}." -ForegroundColor Yellow
+    Write-Host "Check that the broker is running and credentials are correct." -ForegroundColor Yellow
+    Write-Host "Re-run setup with:  ha-display-wake.bat --setup" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "The script will keep trying to connect in the background." -ForegroundColor DarkGray
+}
+
+Write-Host ""
+Write-Host "Listening for wake signals on topic: $topic" -ForegroundColor Cyan
+Write-Host "This window will stay open (or run as a scheduled task for background operation)." -ForegroundColor DarkGray
+Write-Host "Press Ctrl+C to stop." -ForegroundColor DarkGray
+Write-Host ""
+
 while ($true) {
     try {
         $subArgs = @("-h", $broker, "-p", $port, "-t", $topic)
@@ -570,7 +609,7 @@ while ($true) {
             $subArgs += @("-u", $config.username, "-P", $config.password)
         }
 
-        Write-Log "Connecting to MQTT broker..."
+        Write-Log "Subscribing to $topic..."
 
         & $mosquittoSubExe @subArgs 2>&1 | ForEach-Object {
             $payload = "$_".Trim()
@@ -579,7 +618,7 @@ while ($true) {
             }
         }
 
-        Write-Log "mosquitto_sub exited, reconnecting in 10 seconds..."
+        Write-Log "Connection lost, reconnecting in 10 seconds..."
     }
     catch {
         Write-Log "Error: $($_.Exception.Message)"

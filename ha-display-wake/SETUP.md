@@ -84,14 +84,26 @@ The script checks Windows idle time (`GetLastInputInfo`) when a wake signal arri
 - **Idle > active threshold, < screen timeout:** You're away but the screen is still on. The script calls `SetThreadExecutionState(ES_DISPLAY_REQUIRED)` which silently resets the Windows display idle timer. No mouse movement, no visible effect — the screen just doesn't turn off.
 - **Idle > screen timeout:** The screen has probably already turned off. The script resets the idle timer AND simulates a tiny mouse movement (1px right then 1px left) to wake the monitor from DPMS standby.
 
-### Set Up as a Scheduled Task
+### Auto-Start at Login
 
-The `.bat` launcher is convenient for setup, but for the background service you want Task Scheduler to call PowerShell directly so no window flashes on login.
+At the end of setup, the script will offer to create a Windows Scheduled Task that runs ha-display-wake hidden in the background whenever you log in. This is the recommended approach.
 
-1. Open **Task Scheduler** → **Create Task** (not Basic Task)
+If you skipped this step during setup, you can install it later:
+
+    ha-display-wake.bat --install
+
+To remove it:
+
+    ha-display-wake.bat --uninstall
+
+#### Manual Task Scheduler Setup
+
+If you prefer to configure the task yourself (or the automated approach didn't work):
+
+1. Open **Task Scheduler** --> **Create Task** (not Basic Task)
 2. **General:** Name: `ha-display-wake` / Check "Run only when user is logged on" / Check "Hidden"
-3. **Triggers:** New → At log on → your user
-4. **Actions:** New → Program: `powershell.exe` / Arguments: `-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "C:\path\to\ha-display-wake.ps1"`
+3. **Triggers:** New --> At log on --> your user
+4. **Actions:** New --> Program: `powershell.exe` / Arguments: `-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "C:\path\to\ha-display-wake.ps1"`
 5. **Conditions:** Uncheck "Start only if on AC power" (important for laptops)
 6. **Settings:** Uncheck "Stop the task if it runs longer than..." / Set "If already running": Do not start a new instance
 7. Click OK.
@@ -103,6 +115,10 @@ Repeat on each Windows machine.
     Get-ScheduledTask -TaskName "ha-display-wake" | Get-ScheduledTaskInfo
 
 Log: `%APPDATA%\ha-display-wake\ha-display-wake.log`
+
+To check if the script is currently running:
+
+    Get-Process powershell | Where-Object { $_.MainWindowTitle -eq "" }
 
 ---
 
@@ -144,18 +160,31 @@ To re-run setup:
 - **Idle but screen still on:** Calls `xset s reset` (X11) or `SimulateUserActivity` D-Bus method (Wayland) to silently reset the screensaver/DPMS timer. No visible effect.
 - **Screen off (DPMS standby/off):** Calls `xset dpms force on` (X11) or `SetActive false` D-Bus method (Wayland) to wake the display.
 
-### Install as Systemd User Service
+### Auto-Start at Login
 
-    # Run setup first if you haven't already
-    python3 ~/ha-display-wake.py --setup
+At the end of setup, the script will offer to create a systemd user service that runs ha-display-wake in the background whenever you log in. This is the recommended approach.
 
-    # Install the service
+If you skipped this step during setup, you can install it later:
+
+    python3 ha-display-wake.py --install
+
+To remove it:
+
+    python3 ha-display-wake.py --uninstall
+
+The service file is generated automatically with the correct paths for your Python interpreter, script location, and DISPLAY variable.
+
+#### Manual Systemd Setup
+
+If you prefer to set up the service yourself, a template service file is included in the repo:
+
     mkdir -p ~/.config/systemd/user
     cp ha-display-wake.service ~/.config/systemd/user/   # from the repo
+    # Edit the service file to set the correct ExecStart path
     systemctl --user daemon-reload
     systemctl --user enable --now ha-display-wake.service
 
-Enable lingering so the service starts at boot:
+Enable lingering so the service starts at boot (before desktop login):
 
     sudo loginctl enable-linger $USER
 
@@ -200,4 +229,4 @@ Also verify DISPLAY is correct (`echo $DISPLAY`). If it's `:1`, update the servi
 The HA wake interval is longer than your screen timeout. Reduce `minutes: "/10"` in the HA automation to be shorter than your timeout.
 
 **Want to change settings?**
-Either edit the config file directly or re-run with `--setup`. On Windows, restart the scheduled task after changing config. On Linux, restart the service: `systemctl --user restart ha-display-wake`.
+Re-run setup with `--setup`. On Windows, the scheduled task will automatically use the new config on next login (or restart the task). On Linux, restart the service: `systemctl --user restart ha-display-wake`.

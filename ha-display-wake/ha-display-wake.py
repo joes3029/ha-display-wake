@@ -318,7 +318,165 @@ def run_setup(existing: dict = None) -> dict:
     print(f"    Session type:     {SESSION_TYPE}")
     print()
 
+    # ── Auto-start ──────────────────────────
+    install_service()
+
     return config
+
+
+# ── Service Installation ──────────────────────────────────────────────────────
+
+SYSTEMD_USER_DIR = Path.home() / ".config" / "systemd" / "user"
+SERVICE_NAME = "ha-display-wake.service"
+
+SERVICE_TEMPLATE = """\
+[Unit]
+Description=ha-display-wake MQTT listener
+After=network-online.target graphical-session.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 5
+ExecStart={python} {script}
+Restart=always
+RestartSec=10
+Environment=DISPLAY={display}
+
+[Install]
+WantedBy=default.target
+"""
+
+
+def is_service_installed() -> bool:
+    """Check if the systemd user service is installed and enabled."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "is-enabled", "ha-display-wake"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return result.stdout.strip() == "enabled"
+    except Exception:
+        return False
+
+
+def install_service():
+    """Offer to install the systemd user service for auto-start."""
+    if is_service_installed():
+        print("Systemd user service is already installed and enabled.")
+        print()
+        choice = prompt("Reinstall with current settings? (y/n)", "n")
+        if choice.lower() != "y":
+            return
+    else:
+        print("Would you like ha-display-wake to start automatically at login?")
+        print("  This creates a systemd user service that runs in the background.")
+        print()
+        choice = prompt("Install as auto-start service? (y/n)", "y")
+        if choice.lower() != "y":
+            print()
+            print("  Skipped. You can install it later with:  python3 ha-display-wake.py --install")
+            print("  Or set it up manually (see SETUP.md).")
+            print()
+            return
+
+    print()
+    print("Installing systemd user service...", end="", flush=True)
+
+    try:
+        # Determine paths for the service file
+        script_path = Path(__file__).resolve()
+        python_path = sys.executable
+        display = os.environ.get("DISPLAY", ":0")
+
+        # Generate the service file
+        service_content = SERVICE_TEMPLATE.format(
+            python=python_path,
+            script=script_path,
+            display=display,
+        )
+
+        # Write to systemd user directory
+        SYSTEMD_USER_DIR.mkdir(parents=True, exist_ok=True)
+        service_file = SYSTEMD_USER_DIR / SERVICE_NAME
+        service_file.write_text(service_content)
+
+        # Reload and enable
+        subprocess.run(
+            ["systemctl", "--user", "daemon-reload"],
+            capture_output=True, timeout=10,
+        )
+        subprocess.run(
+            ["systemctl", "--user", "enable", "ha-display-wake"],
+            capture_output=True, timeout=10,
+        )
+
+        print(" done!")
+        print()
+        print(f"  Service file: {service_file}")
+        print("  The service will start automatically at your next login.")
+        print("  To start it now:    systemctl --user start ha-display-wake")
+        print("  To remove it later: python3 ha-display-wake.py --uninstall")
+        print()
+
+        # Check if lingering is enabled (needed for service to start before login)
+        try:
+            linger_result = subprocess.run(
+                ["loginctl", "show-user", os.environ.get("USER", ""), "--property=Linger"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if "Linger=yes" not in linger_result.stdout:
+                print("  Optional: Enable lingering so the service starts at boot")
+                print("  (even before you log into the desktop):")
+                print(f"    sudo loginctl enable-linger $USER")
+                print()
+        except Exception:
+            pass
+
+    except Exception as e:
+        print(f" failed!")
+        print(f"  Error: {e}")
+        print("  You can set it up manually (see SETUP.md).")
+        print()
+
+
+def uninstall_service():
+    """Remove the systemd user service."""
+    if not is_service_installed():
+        service_file = SYSTEMD_USER_DIR / SERVICE_NAME
+        if not service_file.exists():
+            print("Systemd user service is not installed.")
+            return
+
+    print("Stopping and removing ha-display-wake service...", end="", flush=True)
+
+    try:
+        subprocess.run(
+            ["systemctl", "--user", "stop", "ha-display-wake"],
+            capture_output=True, timeout=10,
+        )
+        subprocess.run(
+            ["systemctl", "--user", "disable", "ha-display-wake"],
+            capture_output=True, timeout=10,
+        )
+
+        service_file = SYSTEMD_USER_DIR / SERVICE_NAME
+        if service_file.exists():
+            service_file.unlink()
+
+        subprocess.run(
+            ["systemctl", "--user", "daemon-reload"],
+            capture_output=True, timeout=10,
+        )
+
+        print(" done!")
+        print("  ha-display-wake will no longer start at login.")
+    except Exception as e:
+        print(f" failed!")
+        print(f"  Error: {e}")
+        print("  Try removing manually:")
+        print(f"    systemctl --user disable --now ha-display-wake")
+        print(f"    rm {SYSTEMD_USER_DIR / SERVICE_NAME}")
 
 
 def load_config() -> dict | None:
@@ -528,6 +686,16 @@ def on_message(client, userdata, msg):
 
 def main():
     global _config
+
+    # Handle --uninstall flag
+    if "--uninstall" in sys.argv:
+        uninstall_service()
+        sys.exit(0)
+
+    # Handle --install flag (install service without full setup)
+    if "--install" in sys.argv:
+        install_service()
+        sys.exit(0)
 
     force_setup = "--setup" in sys.argv or "--reconfigure" in sys.argv
 

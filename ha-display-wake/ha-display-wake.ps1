@@ -447,7 +447,112 @@ function Invoke-Setup {
     Write-Host "  Screen timeout:   $screenTimeout seconds"
     Write-Host ""
 
+    # -- Auto-start --------------------------------------------
+    Install-ScheduledTask
+
     return $config
+}
+
+function Install-ScheduledTask {
+    $taskName = "ha-display-wake"
+    $taskExists = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+
+    if ($taskExists) {
+        Write-Host "Scheduled task '$taskName' is already installed." -ForegroundColor Green
+        Write-Host ""
+        $choice = Read-HostWithDefault "Reinstall it with current settings? (y/n)" "n"
+        if ($choice -ne "y") {
+            return
+        }
+        # Remove the old task before recreating
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+    }
+    else {
+        Write-Host "Would you like ha-display-wake to start automatically when you log in?" -ForegroundColor Cyan
+        Write-Host "This creates a Windows Scheduled Task that runs the script hidden in the background." -ForegroundColor DarkGray
+        Write-Host ""
+        $choice = Read-HostWithDefault "Install as auto-start task? (y/n)" "y"
+        if ($choice -ne "y") {
+            Write-Host ""
+            Write-Host "  Skipped. You can install it later with:  ha-display-wake.bat --install" -ForegroundColor DarkGray
+            Write-Host "  Or set it up manually via Task Scheduler (see SETUP.md)." -ForegroundColor DarkGray
+            Write-Host ""
+            return
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Installing scheduled task..." -NoNewline
+
+    try {
+        $scriptPath = Join-Path $PSScriptRoot "ha-display-wake.ps1"
+        if (-not (Test-Path $scriptPath)) {
+            # Fallback: try the path of the currently running script
+            $scriptPath = $MyInvocation.ScriptName
+            if (-not $scriptPath) {
+                $scriptPath = $PSCommandPath
+            }
+        }
+
+        $action = New-ScheduledTaskAction `
+            -Execute "powershell.exe" `
+            -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File `"$scriptPath`""
+
+        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+
+        $settings = New-ScheduledTaskSettingsSet `
+            -AllowStartIfOnBatteries `
+            -DontStopIfGoingOnBatteries `
+            -ExecutionTimeLimit ([TimeSpan]::Zero) `
+            -RestartCount 3 `
+            -RestartInterval (New-TimeSpan -Minutes 1) `
+            -Hidden
+
+        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+
+        Register-ScheduledTask `
+            -TaskName $taskName `
+            -Action $action `
+            -Trigger $trigger `
+            -Settings $settings `
+            -Principal $principal `
+            -Description "ha-display-wake: Wakes screens when room presence is detected via Home Assistant." `
+            -Force | Out-Null
+
+        Write-Host " done!" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "  Task '$taskName' will run automatically at login." -ForegroundColor DarkGray
+        Write-Host "  To remove it later:  ha-display-wake.bat --uninstall" -ForegroundColor DarkGray
+        Write-Host ""
+    }
+    catch {
+        Write-Host " failed!" -ForegroundColor Red
+        Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "  You can set it up manually via Task Scheduler (see SETUP.md)." -ForegroundColor Yellow
+        Write-Host ""
+    }
+}
+
+function Uninstall-ScheduledTask {
+    $taskName = "ha-display-wake"
+    $taskExists = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+
+    if (-not $taskExists) {
+        Write-Host "Scheduled task '$taskName' is not installed." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "Removing scheduled task '$taskName'..." -NoNewline
+    try {
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+        Write-Host " done!" -ForegroundColor Green
+        Write-Host "  ha-display-wake will no longer start at login." -ForegroundColor DarkGray
+    }
+    catch {
+        Write-Host " failed!" -ForegroundColor Red
+        Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "  Try removing it manually via Task Scheduler." -ForegroundColor Yellow
+    }
 }
 
 function Get-SavedConfig {
@@ -509,6 +614,18 @@ function Invoke-WakeIfNeeded {
 
 # Handle --setup flag
 $forceSetup = $args -contains "--setup" -or $args -contains "-setup" -or $args -contains "--reconfigure"
+
+# Handle --uninstall flag
+if ($args -contains "--uninstall") {
+    Uninstall-ScheduledTask
+    exit 0
+}
+
+# Handle --install flag (install scheduled task without full setup)
+if ($args -contains "--install") {
+    Install-ScheduledTask
+    exit 0
+}
 
 # Load or create config
 $config = Get-SavedConfig

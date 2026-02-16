@@ -1,24 +1,30 @@
 # Home Assistant Automations for ha-display-wake
 #
-# Add via the HA UI (Settings → Automations → Create → Edit in YAML)
-# or append to your automations.yaml file.
-#
 # ── Configuration ──────────────────────────────────────────────────────────────
 #
-# 1. Set your sensor entity ID here (once) — it's referenced by all three
-#    automations via the YAML anchor &sensor / *sensor:
+# 1. Replace every instance of "binary_sensor.office_pir_motion" with your
+#    sensor's entity ID. Find yours in HA: Settings → Devices & Services → Entities.
 #
-#      entity_id: &sensor binary_sensor.office_pir_motion
-#                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-#                         Replace this with your sensor's entity ID.
-#                         Find it in HA: Settings → Devices & Services → Entities.
+# 2. Replace "office" in the MQTT topics and aliases with your room name.
+#    The room name must match what you configure in the client scripts.
 #
-# 2. Replace "office" in the MQTT topic strings and automation aliases with
-#    your room name. The room name must match what you configure in the client
-#    scripts.
+# 3. The wake interval (minutes: "/10") should be SHORTER than the shortest
+#    screen timeout across your PCs. For 20-minute timeouts, 10 minutes works.
 #
-# The wake interval (minutes: "/10") should be SHORTER than the shortest screen
-# timeout across your PCs. For 20-minute timeouts, 10 minutes is sensible.
+# ── Installation ───────────────────────────────────────────────────────────────
+#
+# OPTION A — Paste into automations.yaml:
+#   Append the contents of this file to your automations.yaml and restart HA.
+#
+# OPTION B — Use the HA UI:
+#   For each automation below:
+#   1. Go to Settings → Automations → Create Automation → Create new automation
+#   2. Click the three-dot menu (⋮) top right → Edit in YAML
+#   3. Paste the automation (everything from "alias:" to just before the next
+#      "---" separator or end of file). Do NOT include the leading "- ".
+#   4. Click Save.
+#   Repeat for all three automations.
+#
 # ───────────────────────────────────────────────────────────────────────────────
 
 # ── 1. Wake on room entry (vacant → occupied transition) ─────────────────────
@@ -29,7 +35,7 @@
     (sensor transitions from off to on).
   trigger:
     - platform: state
-      entity_id: &sensor binary_sensor.bench_lights_pir_sensor   # ← SET YOUR SENSOR HERE
+      entity_id: binary_sensor.office_pir_motion
       from: "off"
       to: "on"
   action:
@@ -56,7 +62,7 @@
       minutes: "/10"
   condition:
     - condition: state
-      entity_id: *sensor
+      entity_id: binary_sensor.office_pir_motion
       state: "on"
   action:
     - service: mqtt.publish
@@ -73,7 +79,7 @@
     Publishes vacant state when the office sensor goes off.
   trigger:
     - platform: state
-      entity_id: *sensor
+      entity_id: binary_sensor.office_pir_motion
       to: "off"
   action:
     - service: mqtt.publish

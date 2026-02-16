@@ -1,18 +1,29 @@
 # Setup Guide
 
+This guide walks through setting up ha-display-wake step by step. You'll need the files from the repo — see the [README](README.md) for the file list and what each one does.
+
 ## Step 1: Home Assistant
 
 ### Add the Automations
 
-Open `ha-automation.yaml` and replace `binary_sensor.office_pir_motion` with your actual sensor entity ID. You can find this in HA under Settings → Devices & Services → Entities.
+Open [`ha-automation.yaml`](ha-automation.yaml) and replace `binary_sensor.office_pir_motion` with your actual sensor entity ID (it appears three times — once per automation). You can find your sensor's entity ID in HA under Settings → Devices & Services → Entities.
 
-Add the automations via the HA UI (Settings → Automations → Create → Edit in YAML) or append to your `automations.yaml` file. There are three automations:
+There are two ways to install the automations:
+
+**Option A — Append to automations.yaml:** Paste the entire file contents into your `automations.yaml` (or `configuration.yaml` if that's where your automations live) and restart HA. This is the simplest approach if you're comfortable editing config files.
+
+**Option B — Use the HA UI:** For each of the three automations:
+
+1. Go to Settings → Automations → Create Automation → Create new automation
+2. Click the three-dot menu (⋮) top right → Edit in YAML
+3. Paste the automation block — everything from `alias:` through to just before the next comment separator. **Do not include the leading `- `** (the UI handles each automation as a single object, not a list item).
+4. Click Save. There are three automations:
 
 1. **Entry wake** — fires on the off → on transition (someone enters the room)
 2. **Sustained wake** — fires every 10 minutes while the sensor remains on
 3. **Vacant state** — publishes a retained state message when the sensor goes off
 
-Replace `"office"` with your room name in all three automations if using a different room. The room name must match what you configure in the client scripts.
+If you're using a room name other than "office", also replace `"office"` in the MQTT topic strings and automation aliases. The room name must match what you configure in the client scripts.
 
 ### Test the MQTT Messages
 
@@ -49,10 +60,11 @@ You only need the client tools — deselect the Service component during install
 
 ### First Run — Interactive Setup
 
-    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # one-time, if not already set
-    .\ha-display-wake.ps1
+Double-click `ha-display-wake.bat`, or from a terminal:
 
-On first run, the script will:
+    ha-display-wake.bat
+
+The `.bat` launcher handles PowerShell execution policy automatically — no need to change system settings or unblock files. On first run, the script will:
 
 1. Search for your MQTT broker (tries `homeassistant.local`, common hostnames, DNS resolution)
 2. Prompt for broker address, port, and MQTT credentials
@@ -64,7 +76,7 @@ On first run, the script will:
 
 To re-run setup later:
 
-    .\ha-display-wake.ps1 --setup
+    ha-display-wake.bat --setup
 
 ### How the Three Tiers Work
 
@@ -76,10 +88,12 @@ The script checks Windows idle time (`GetLastInputInfo`) when a wake signal arri
 
 ### Set Up as a Scheduled Task
 
+The `.bat` launcher is convenient for setup, but for the background service you want Task Scheduler to call PowerShell directly so no window flashes on login.
+
 1. Open **Task Scheduler** → **Create Task** (not Basic Task)
 2. **General:** Name: `ha-display-wake` / Check "Run only when user is logged on" / Check "Hidden"
 3. **Triggers:** New → At log on → your user
-4. **Actions:** New → Program: `powershell.exe` / Arguments: `-WindowStyle Hidden -ExecutionPolicy Bypass -File "C:\path\to\ha-display-wake.ps1"`
+4. **Actions:** New → Program: `powershell.exe` / Arguments: `-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File "C:\path\to\ha-display-wake.ps1"`
 5. **Conditions:** Uncheck "Start only if on AC power" (important for laptops)
 6. **Settings:** Uncheck "Stop the task if it runs longer than..." / Set "If already running": Do not start a new instance
 7. Click OK.
@@ -107,7 +121,7 @@ Note: `xprintidle` is used for idle time detection on X11. If it's unavailable, 
 
     echo $XDG_SESSION_TYPE
 
-The script auto-detects X11 vs Wayland and uses the appropriate methods. Budgie typically uses X11.
+The script auto-detects X11 vs Wayland and uses the appropriate methods. Most Ubuntu desktop variants (including Budgie, XFCE, MATE) use X11 by default; Ubuntu with GNOME 22.04+ may use Wayland.
 
 ### First Run — Interactive Setup
 
@@ -139,7 +153,7 @@ To re-run setup:
 
     # Install the service
     mkdir -p ~/.config/systemd/user
-    cp ha-display-wake.service ~/.config/systemd/user/
+    cp ha-display-wake.service ~/.config/systemd/user/   # from the repo
     systemctl --user daemon-reload
     systemctl --user enable --now ha-display-wake.service
 

@@ -49,15 +49,36 @@ The key insight: **HA handles the "is someone in the room?" question, and each P
 
 ## Quick Start
 
+### 0. Get the Files
+
+```bash
+git clone https://github.com/YOUR_USERNAME/ha-display-wake.git
+```
+
+Or download and extract the [latest release](../../releases). Here's what's in the repo:
+
+| File | What it is | Where it goes |
+|------|-----------|---------------|
+| [`ha-automation.yaml`](ha-automation.yaml) | Home Assistant automations | Copy into your HA automations config |
+| [`ha-display-wake.bat`](ha-display-wake.bat) | Windows launcher (double-click to run) | Same folder as the .ps1 on your Windows PC(s) |
+| [`ha-display-wake.ps1`](ha-display-wake.ps1) | Windows client script | Any folder on your Windows PC(s) |
+| [`ha-display-wake.py`](ha-display-wake.py) | Linux client script | Your home directory on your Linux PC(s) |
+| [`ha-display-wake.service`](ha-display-wake.service) | Systemd unit file (Linux) | `~/.config/systemd/user/` |
+
 ### 1. Home Assistant
 
-Copy the automations from [`ha-automation.yaml`](ha-automation.yaml) into your HA instance (Settings → Automations → Create → Edit in YAML). Replace `binary_sensor.office_pir_motion` with your sensor's entity ID.
+Open [`ha-automation.yaml`](ha-automation.yaml) and replace `binary_sensor.office_pir_motion` with your sensor's entity ID (appears three times — once per automation). Also replace `"office"` in the MQTT topic strings if you're using a different room name.
+
+Then add the automations to HA. The file header explains two options: append to your `automations.yaml` file, or paste each automation individually into the HA UI (Settings → Automations → Create → Edit in YAML, **without** the leading `- `).
+
+There are three automations: one that fires when someone enters the room, one that pulses every 10 minutes while the room stays occupied, and one that publishes a "vacant" state when presence ends.
 
 ### 2. Your PCs
 
 **Windows** (requires [Mosquitto client tools](https://mosquitto.org/download/)):
-```powershell
-.\ha-display-wake.ps1        # First run walks you through setup
+```
+ha-display-wake.bat              # Double-click or run from terminal — first run walks you through setup
+ha-display-wake.bat --setup      # Re-run setup any time
 ```
 
 **Linux** (requires `paho-mqtt`, `xdotool`, `xprintidle`, `x11-xserver-utils`):

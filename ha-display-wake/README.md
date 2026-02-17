@@ -16,25 +16,25 @@ It's the kind of thing you set up once, forget about, and then one day realise y
 - **A presence sensor** in the room — a PIR motion sensor is the most common and cheapest option (Zigbee, Z-Wave, ESPHome, Wi-Fi — anything HA can see as a binary sensor). mmWave sensors work great too, especially for detecting someone sitting still
 - **One or more PCs** running Windows 10/11 or Linux
 
-That's it. No custom HA integrations, no cloud services, no accounts, no subscriptions. Just MQTT messages and small scripts.
+That's it. No custom HA integrations, no cloud services, no accounts, no subscriptions. Just MQTT messages and small scripts. Required dependencies on each platform are detected and installed automatically during setup.
 
 ## How It Works
 
 ```
 Motion sensor detects presence
-        │
-        ▼
+        |
+        v
 Home Assistant (decides: occupied or vacant?)
-        │
-        ├─ Room just became occupied → publish "wake"
-        └─ Room still occupied, periodic check → publish "wake"
-        │
-        ▼
-MQTT: ha-display-wake/{room}/command → "wake"
-        │
-        ├──► Windows PC ──► active? ignore │ idle? reset timer │ screen off? wake it
-        ├──► Windows Laptop ──► same
-        └──► Linux PC ──► same
+        |
+        |-- Room just became occupied --> publish "wake"
+        '-- Room still occupied, periodic check --> publish "wake"
+        |
+        v
+MQTT: ha-display-wake/{room}/command --> "wake"
+        |
+        |---> Windows PC ---> active? ignore | idle? reset timer | screen off? wake it
+        |---> Windows Laptop ---> same
+        '---> Linux PC ---> same
 ```
 
 Each client script has three tiers of behaviour:
@@ -61,9 +61,9 @@ Or download and extract the [latest release](../../releases). Here's what's in t
 |------|-----------|---------------|
 | [`ha-automation.yaml`](ha-automation.yaml) | Home Assistant automations | Copy into your HA automations config |
 | [`ha-display-wake.bat`](ha-display-wake.bat) | Windows launcher (double-click to run) | Same folder as the .ps1 on your Windows PC(s) |
-| [`ha-display-wake.ps1`](ha-display-wake.ps1) | Windows client script | Any folder on your Windows PC(s) |
-| [`ha-display-wake.py`](ha-display-wake.py) | Linux client script | Your home directory on your Linux PC(s) |
-| [`ha-display-wake.service`](ha-display-wake.service) | Systemd unit file (Linux) | `~/.config/systemd/user/` |
+| [`ha-display-wake.ps1`](ha-display-wake.ps1) | Windows client script | Same folder as the .bat |
+| [`ha-display-wake.py`](ha-display-wake.py) | Linux client script | Any directory on your Linux PC(s) |
+| [`ha-display-wake.service`](ha-display-wake.service) | Systemd unit file template (Linux) | Only needed for manual setup — see [SETUP.md](SETUP.md) |
 
 ### 1. Home Assistant
 
@@ -75,26 +75,43 @@ There are three automations: one that fires when someone enters the room, one th
 
 ### 2. Your PCs
 
-**Windows** (setup will check for [Mosquitto client tools](https://mosquitto.org/download/) and offer to install if needed):
+**Windows — double-click `ha-display-wake.bat`:**
 ```
-ha-display-wake.bat              # Double-click or run from terminal — first run walks you through setup
+ha-display-wake.bat              # First run walks you through setup
 ha-display-wake.bat --setup      # Re-run setup any time
 ```
 
-**Linux** (requires `paho-mqtt`, `xdotool`, `xprintidle`, `x11-xserver-utils`):
+**Linux — run the Python script:**
 ```bash
-python3 ha-display-wake.py     # First run walks you through setup
+python3 ha-display-wake.py       # First run walks you through setup
 ```
 
-Both scripts auto-detect your MQTT broker, test the connection, and save configuration. See **[SETUP.md](SETUP.md)** for detailed instructions including running as a background service.
+On both platforms, setup will:
+
+1. Check for required dependencies and offer to install any that are missing
+2. Search for your MQTT broker and test the connection
+3. Walk you through configuration (broker, room name, thresholds)
+4. Auto-detect your screen timeout from system settings
+5. Offer to install the script as an auto-start service so it runs at login
+
+No manual package installs, no PATH configuration, no service file editing. See **[SETUP.md](SETUP.md)** for the full walkthrough and platform-specific details.
+
+### Available Commands
+
+| Command | What it does |
+|---------|-------------|
+| `ha-display-wake.bat` / `python3 ha-display-wake.py` | Run the script (first run triggers setup) |
+| `--setup` | Re-run interactive setup |
+| `--install` | Install the auto-start service (without re-running full setup) |
+| `--uninstall` | Remove the auto-start service |
 
 ## Supported Platforms
 
-| Platform | Display Server | Dependencies |
+| Platform | Display Server | Dependencies (auto-installed during setup) |
 |----------|---------------|-------------|
-| Windows 10/11 | — | [Mosquitto client tools](https://mosquitto.org/download/) (setup offers to install) |
-| Linux (X11) | X.Org / Xwayland | python3, paho-mqtt, xdotool, xprintidle, x11-xserver-utils |
-| Linux (Wayland) | GNOME | python3, paho-mqtt |
+| Windows 10/11 | — | [Mosquitto client tools](https://mosquitto.org/download/) (installed via `winget`) |
+| Linux (X11) | X.Org / Xwayland | paho-mqtt, xdotool, xprintidle, x11-xserver-utils |
+| Linux (Wayland) | GNOME | paho-mqtt |
 
 ## Configuration
 
@@ -115,9 +132,9 @@ Config location:
 ## MQTT Topics
 
 ```
-ha-display-wake/{room}/command    →  "wake"       (HA → clients)
-ha-display-wake/{room}/state      →  "occupied"   (informational, retained)
-                                     "vacant"
+ha-display-wake/{room}/command    -->  "wake"       (HA --> clients)
+ha-display-wake/{room}/state      -->  "occupied"   (informational, retained)
+                                       "vacant"
 ```
 
 The `command` topic is what drives the clients. The `state` topic is informational — useful for HA dashboards and for future features like auto-locking workstations when you leave.

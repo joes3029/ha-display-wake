@@ -17,7 +17,9 @@ There are two ways to install the automations:
 1. Go to Settings → Automations → Create Automation → Create new automation
 2. Click the three-dot menu (⋮) top right → Edit in YAML
 3. Paste the automation block — everything from `alias:` through to just before the next comment separator. **Do not include the leading `- `** (the UI handles each automation as a single object, not a list item).
-4. Click Save. There are three automations:
+4. Click Save.
+
+The three automations are:
 
 1. **Entry wake** — fires on the off → on transition (someone enters the room)
 2. **Sustained wake** — fires every 10 minutes while the sensor remains on
@@ -48,9 +50,11 @@ Most PIR/mmWave integrations (Zigbee2MQTT, ZHA, ESPHome, etc.) have a configurab
 
 ## Step 2: Windows Setup
 
-### Install Mosquitto Client Tools (handled by setup)
+### What You Need
 
-The script needs `mosquitto_sub.exe` to receive MQTT messages. On first run, setup checks for it automatically and offers to install it via `winget` if missing. You can also install it ahead of time:
+Nothing — the setup script handles everything. It will detect and offer to install the Mosquitto client tools via `winget` if they're not already present, configure the MQTT connection, and install a Scheduled Task for auto-start at login.
+
+If you prefer to install Mosquitto ahead of time:
 
     winget install EclipseFoundation.Mosquitto
 
@@ -62,15 +66,19 @@ Double-click `ha-display-wake.bat`, or from a terminal:
 
     ha-display-wake.bat
 
-The `.bat` launcher handles PowerShell execution policy automatically — no need to change system settings or unblock files. On first run, the script will:
+The `.bat` launcher handles PowerShell execution policy automatically — no need to change system settings or unblock downloaded files. On first run, the setup wizard will:
 
-1. Search for your MQTT broker (tries `homeassistant.local`, common hostnames, DNS resolution)
-2. Prompt for broker address, port, and MQTT credentials
-3. Test the connection
-4. Ask for your room name (used in the MQTT topic)
-5. Ask for the active threshold (how recently you must have used the keyboard/mouse to be considered "active")
-6. Auto-detect your screen timeout from Windows power settings
-7. Save everything to `%APPDATA%\ha-display-wake\config.json`
+1. **Check for mosquitto_sub** — if not found, offers to install via `winget`, open the download page, or skip
+2. **Find your MQTT broker** — tries `homeassistant.local`, common hostnames, DNS resolution
+3. **Prompt for connection details** — broker address, port, MQTT credentials
+4. **Test the connection** — verifies the broker is reachable before continuing
+5. **Configure the room** — room name (used in the MQTT topic)
+6. **Set the active threshold** — how recently you must have used the keyboard/mouse to be considered "active" (default: 30 seconds)
+7. **Auto-detect screen timeout** — reads your Windows power plan settings
+8. **Save configuration** — to `%APPDATA%\ha-display-wake\config.json`
+9. **Offer auto-start** — creates a hidden Scheduled Task that runs at login
+
+After setup, the script tests the MQTT broker connection and begins listening for wake signals.
 
 To re-run setup later:
 
@@ -86,9 +94,9 @@ The script checks Windows idle time (`GetLastInputInfo`) when a wake signal arri
 
 ### Auto-Start at Login
 
-At the end of setup, the script will offer to create a Windows Scheduled Task that runs ha-display-wake hidden in the background whenever you log in. This is the recommended approach.
+At the end of setup, the script offers to create a Windows Scheduled Task that runs ha-display-wake hidden in the background whenever you log in. This is the recommended approach — no console window, no manual intervention, survives reboots.
 
-If you skipped this step during setup, you can install it later:
+If you skipped this step during setup:
 
     ha-display-wake.bat --install
 
@@ -116,20 +124,23 @@ Repeat on each Windows machine.
 
 Log: `%APPDATA%\ha-display-wake\ha-display-wake.log`
 
-To check if the script is currently running:
-
-    Get-Process powershell | Where-Object { $_.MainWindowTitle -eq "" }
-
 ---
 
 ## Step 3: Linux Setup
 
-### Install Dependencies
+### What You Need
+
+Python 3 (pre-installed on most Linux distributions). Everything else is handled during setup:
+
+- **paho-mqtt** — the MQTT client library. If not installed, the script offers to install it via `pip` on first run.
+- **xdotool, x11-xserver-utils, xprintidle** — display management tools for X11. The setup wizard checks for these and reports which are missing.
+
+If you prefer to install dependencies ahead of time:
 
     sudo apt install xdotool x11-xserver-utils xprintidle
     pip install paho-mqtt --break-system-packages
 
-Note: `xprintidle` is used for idle time detection on X11. If it's unavailable, the script falls back to other methods.
+On Wayland/GNOME, only paho-mqtt is needed — display management uses D-Bus calls.
 
 ### Check Display Server
 
@@ -141,14 +152,18 @@ The script auto-detects X11 vs Wayland and uses the appropriate methods. Most Ub
 
     python3 ha-display-wake.py
 
-On first run, the script will:
+On first run, the setup wizard will:
 
-1. Check installed dependencies and report any issues
-2. Auto-detect session type (X11 / Wayland)
-3. Search for your MQTT broker
-4. Walk through the same configuration prompts as the Windows version
-5. Auto-detect screen timeout from DPMS settings
-6. Save to `~/.config/ha-display-wake/config.json`
+1. **Check for paho-mqtt** — if not installed, offers to install via `pip`
+2. **Check X11 tools** — reports any missing packages (`xdotool`, `xprintidle`, etc.)
+3. **Auto-detect session type** — X11 or Wayland
+4. **Find your MQTT broker** — same auto-detection as the Windows version
+5. **Prompt for connection details** — broker address, port, MQTT credentials
+6. **Test the connection** — verifies the broker is reachable
+7. **Configure the room** — room name and active threshold
+8. **Auto-detect screen timeout** — reads DPMS settings from `xset q`
+9. **Save configuration** — to `~/.config/ha-display-wake/config.json`
+10. **Offer auto-start** — creates and enables a systemd user service
 
 To re-run setup:
 
@@ -162,9 +177,9 @@ To re-run setup:
 
 ### Auto-Start at Login
 
-At the end of setup, the script will offer to create a systemd user service that runs ha-display-wake in the background whenever you log in. This is the recommended approach.
+At the end of setup, the script offers to create a systemd user service. The service file is generated automatically with the correct paths for your Python interpreter, script location, and DISPLAY variable — no manual editing needed.
 
-If you skipped this step during setup, you can install it later:
+If you skipped this step during setup:
 
     python3 ha-display-wake.py --install
 
@@ -172,15 +187,13 @@ To remove it:
 
     python3 ha-display-wake.py --uninstall
 
-The service file is generated automatically with the correct paths for your Python interpreter, script location, and DISPLAY variable.
-
 #### Manual Systemd Setup
 
-If you prefer to set up the service yourself, a template service file is included in the repo:
+If you prefer to set up the service yourself, a template service file ([`ha-display-wake.service`](ha-display-wake.service)) is included in the repo. You'll need to edit the `ExecStart` path to match your system:
 
     mkdir -p ~/.config/systemd/user
-    cp ha-display-wake.service ~/.config/systemd/user/   # from the repo
-    # Edit the service file to set the correct ExecStart path
+    cp ha-display-wake.service ~/.config/systemd/user/
+    # Edit ExecStart= to point to your python3 and script paths
     systemctl --user daemon-reload
     systemctl --user enable --now ha-display-wake.service
 
@@ -202,8 +215,8 @@ Log: `~/.config/ha-display-wake/ha-display-wake.log`
 **Setup can't find the broker:**
 Enter the IP address manually. You can find your HA IP in Settings → System → Network, or check your router's DHCP leases.
 
-**mosquitto_sub not found after install:**
-If you installed Mosquitto via `winget` or the MSI installer but setup still can't find it, the PATH change may not have taken effect yet. Close all terminal windows and re-run `ha-display-wake.bat --setup`. The script also checks `C:\Program Files\mosquitto\` directly, so it should find it there.
+**Windows: mosquitto_sub not found after install:**
+If you installed Mosquitto via `winget` or the MSI installer but the script still can't find it, the PATH change may not have taken effect yet. Close all terminal windows and re-run `ha-display-wake.bat --setup`. The script also checks `C:\Program Files\mosquitto\` directly, so it should find it there.
 
 **mosquitto_sub won't connect:**
 Test manually: `mosquitto_sub -h <broker> -u <user> -P <pass> -t "#" -v`
@@ -215,15 +228,18 @@ Check traces: Settings → Automations → your automation → Traces. Verify th
 **Windows: "screen likely off" but it isn't:**
 The Windows script infers screen state from idle time vs screen timeout. If your actual timeout differs from what was detected (e.g. you have different AC/DC settings, or group policy overrides), re-run `--setup` and enter the correct timeout manually.
 
+**Linux: paho-mqtt install fails:**
+On newer Ubuntu/Debian systems (23.04+), pip requires `--break-system-packages`. The script tries this automatically, but if it fails, install the system package instead: `sudo apt install python3-paho-mqtt`.
+
 **Linux: xset reports "Monitor is On" even when screen is off:**
 Some GPU drivers don't report DPMS state accurately. The script also checks idle time as a fallback, but if neither works reliably, please open an issue.
 
 **Linux: service fails after boot:**
-Increase the startup delay in the service file:
+The auto-generated service file includes a 5-second startup delay. If that isn't enough (e.g. on slower hardware or if the network takes longer), edit the service file and increase it:
 
     ExecStartPre=/bin/sleep 15
 
-Also verify DISPLAY is correct (`echo $DISPLAY`). If it's `:1`, update the service file.
+Also verify DISPLAY is correct (`echo $DISPLAY`). If it's `:1`, update the service file's `Environment=DISPLAY=` line.
 
 **Screen wakes then turns off again immediately:**
 The HA wake interval is longer than your screen timeout. Reduce `minutes: "/10"` in the HA automation to be shorter than your timeout.
